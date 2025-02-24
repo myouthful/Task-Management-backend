@@ -3,7 +3,7 @@ const Task = require("../models/Task"); // FIXED import path
 const mongoose = require("mongoose");
 require("dotenv").config();
 
-// Connect to MongoDB if not already connected
+ // Connect to MongoDB if not already connected
 if (mongoose.connection.readyState === 0) {
   mongoose.connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
