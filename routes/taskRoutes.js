@@ -1,18 +1,24 @@
 const express = require("express");
 const {
   createTask,
+  getInternTasks,  
   getAllTasks,
   getTaskById,
   completeTask,
   failTask,
   deleteTask,
-} = require("../controllers/taskController");
+} = require("../controllers/taskControllers");
 
-const { authMiddleware, roleMiddleware } = require("../middlewares/authMiddleware");
+
+const { authMiddleware, roleMiddleware } = require("../middleware/authMiddleware");
 const router = express.Router();
 
 // ✅ Only Staff & Admins Can Create Tasks
 router.post("/", authMiddleware, roleMiddleware(["staff", "admin"]), createTask);
+
+// ✅ Get tasks assigned to the logged-in intern
+router.get("/intern", authMiddleware, getInternTasks);
+
 
 // ✅ Only Admins Can View All Tasks
 router.get("/", authMiddleware, roleMiddleware(["admin"]), getAllTasks);
