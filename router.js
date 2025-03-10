@@ -6,6 +6,7 @@ const mongodbSocket = require('./mongodb.js')
 
 const Router = express.Router();
 
+
 Router.post('/signup', userValidationRules, async (req, res) => {
     let client;
     try {
@@ -37,13 +38,15 @@ Router.post('/signup', userValidationRules, async (req, res) => {
             "lastname": lastname,
             "email": email,
             "password": password,
-            "role": "Not Assigned"
+            "role": "Not Assigned",
+            "validated": false
         }
 
         const data2 = {
             "firstname": firstname,
             "lastname": lastname,
             "email": email,
+            "validated": false
         }
 
         // First Database Operation
@@ -85,7 +88,44 @@ Router.post('/signup', userValidationRules, async (req, res) => {
     }
 
 
-})
+});
+
+
+Router.get('/recentsignup', async (req, res) => {
+
+    let client;
+    try {
+
+        client = await mongodbSocket;
+        if (!client) {
+            throw new Error('Database connection not established');
+        }
+        const db = client.db('RoleLevel');
+        const validatedUsersList = db.collection('users');
+
+        const users = await validatedUsersList.find({ validated: false }).toArray();
+
+        if (!users) {
+            return res.status(401).json({
+                success: false,
+                message: 'No recent signup'
+            })
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Recent signups',
+            users: users
+        })
+    } catch (error) {
+        console.error('unable to fetch recent signup');
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        })
+    }
+
+});
 
 
 Router.post('/login', async (req, res) => {
@@ -111,7 +151,7 @@ Router.post('/login', async (req, res) => {
         }
 
         // Check if role is "Not Assigned"
-        if (user.role === "Not Assigned") {
+        if (user.role === "Not Assigned" && user.validated === false) {
             return res.status(403).json({
                 success: false,
                 message: 'Access denied. You have not been granted access. Please email mydreamconnect@gmail.com for support'
@@ -134,7 +174,49 @@ Router.post('/login', async (req, res) => {
 });
 
 
-Router.post('/assignroles',Emailvalidator, async (req, res) => {
+Router.post('/changeroles', async (req, res) => {
+    let client;
+    try {
+        client = await mongodbSocket;
+        if (!client) {
+            throw new Error('Database connection not established');
+        }
+
+        const { email, role } = req.body;
+
+        const db = client.db('UsersTMP');
+        const usersCollection = db.collection('users');
+
+        const result = await usersCollection.findOneAndUpdate(
+            { email: email },
+            { $set: { role: role.toLowerCase() } },
+            { returnDocument: 'after' }
+        );
+
+        if (!result) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'role changed successfully'
+        });
+
+
+    } catch (error) {
+        console.error('Error assigning role and department:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+});
+
+
+Router.post('/assignroles', Emailvalidator, async (req, res) => {
     let client;
     try {
         client = await mongodbSocket;
@@ -161,15 +243,15 @@ Router.post('/assignroles',Emailvalidator, async (req, res) => {
         const { role, email, dept } = req.body;
 
         // Validate role
-        if (!['intern', 'staff'].includes(role.toLowerCase())) {
+        if (!['intern', 'staff', 'team lead'].includes(role.toLowerCase())) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid role. Role must be either "intern" or "staff"'
+                message: 'Invalid role. Role must be either "intern","staff" or Team Lead'
             });
         }
 
-         // Validate department
-         if (!['AOF', 'IDP', 'PDE'].includes(dept.toUpperCase())) {
+        // Validate department
+        if (!['AOF', 'IDP', 'PDE'].includes(dept.toUpperCase())) {
             return res.status(400).json({
                 success: false,
                 message: 'Invalid department. Department must be either "AOF", "IDP", or "PDE"'
@@ -183,13 +265,13 @@ Router.post('/assignroles',Emailvalidator, async (req, res) => {
         // Find and update the user document with both role and department
         const result = await usersCollection.findOneAndUpdate(
             { email: email },
-            { 
-                $set: { 
+            {
+                $set: {
                     role: role.toLowerCase(),
                     department: dept.toUpperCase()
-                } 
+                }
             },
-            { 
+            {
                 returnDocument: 'after',
                 upsert: false
             }
@@ -202,9 +284,32 @@ Router.post('/assignroles',Emailvalidator, async (req, res) => {
             });
         }
 
+        const validation = client.db('RoleLevel');
+        const validatedUsers = db.collection('users');
+
+        const validated = await validatedUsers.findOneAndUpdate(
+            { email: email },
+            {
+                $set: {
+                    validated: true
+                }
+            },
+            {
+                returnDocument: 'after',
+                upsert: false
+            }
+        )
+
+        if (!validated) {
+            return res.status(404).json({
+                success: false,
+                message: 'Error validating'
+            });
+        }
+
         const tasksDB = client.db('TasksMP');
         const collectionName = email;
-        
+
         try {
             await tasksDB.createCollection(collectionName);
             // Initialize the collection with default document including department
@@ -232,7 +337,7 @@ Router.post('/assignroles',Emailvalidator, async (req, res) => {
             message: 'Internal server error'
         });
     }
-})
+});
 
 
 Router.post('/tasks', async (req, res) => {
@@ -245,7 +350,7 @@ Router.post('/tasks', async (req, res) => {
 
         const {
             dept, email, taskcreator,
-            taskId,taskdescription,
+            taskId, taskdescription,
             taskType, dueDate, assignedTo,
             Status
         } = req.body;
@@ -451,11 +556,11 @@ Router.get('/internlog', async (req, res) => {
 
         // Connect to TasksMP database
         const tasksDB = client.db('TasksMP');
-        
+
         try {
             // Get the collection for this intern
             const internCollection = tasksDB.collection(email);
-            
+
             // Fetch the first 10 documents, sorted by date (newest first)
             const tasks = await internCollection
                 .find({})
@@ -531,12 +636,12 @@ Router.post('/fetchteam', async (req, res) => {
 
         // If staff verified, find interns in the department
         const teamMembers = await usersCollection
-            .find({ 
+            .find({
                 department: dept.toUpperCase(),
                 role: 'intern'
             })
-            .project({ 
-                email: 1, 
+            .project({
+                email: 1,
                 firstname: 1,
                 _id: 0
             })
