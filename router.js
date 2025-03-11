@@ -136,7 +136,7 @@ Router.post('/login', async (req, res) => {
             throw new Error('Database connection not established');
         }
 
-        const { email, password } = req.body;
+        const { email, password} = req.body;
 
         const db = client.db('UsersTMP');
         const usersCollection = db.collection('users');
@@ -189,9 +189,12 @@ Router.post('/changeroles', async (req, res) => {
 
         const result = await usersCollection.findOneAndUpdate(
             { email: email },
-            { $set: { role: role.toLowerCase(),
-                department: dept.toUpperCase()
-             } },
+            {
+                $set: {
+                    role: role.toLowerCase(),
+                    department: dept.toUpperCase()
+                }
+            },
             { returnDocument: 'after' }
         );
 
@@ -350,93 +353,95 @@ Router.post('/tasks', async (req, res) => {
             throw new Error('Database connection not established');
         }
 
-        const {
-            dept, email, taskcreator,
-            taskId, taskdescription,
-            taskType, dueDate, assignedTo,
-            Status
-        } = req.body;
-
-
-
-        // Convert dueDate string to MongoDB Date object
-        const convertedDueDate = new Date(dueDate);
-        if (isNaN(convertedDueDate.getTime())) {
+        // Validate that req.body is an array
+        if (!Array.isArray(req.body)) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid date format'
+                message: 'Request body must be an array of tasks'
             });
         }
 
-
-        // Validate assignedTo is an array
-        if (!Array.isArray(assignedTo)) {
-            return res.status(400).json({
-                success: false,
-                message: 'assignedTo must be an array of emails'
-            });
-        }
-
-
-
-        const data1 = {
-            taskId: taskId,
-            taskdescription: taskdescription,
-            taskType: taskType,
-            dueDate: convertedDueDate,
-            assignedTo: assignedTo,
-            Status: Status,
-            taskcreator: taskcreator,
-            email: email,
-            dept: dept,
-            noOfExpectedResponse: assignedTo.length,
-            responseRecieved: 0,
-            userswhosubmitted: [],
-            nosubmits: assignedTo
-        }
-
-
-        const data2 = {
-            taskId: taskId,
-            taskdescription: taskdescription,
-            taskType: taskType,
-            dueDate: convertedDueDate,
-            Status: "Not done"
-        }
-
-
-        // Connect to TasksMP database
         const tasksDB = client.db('TasksMP');
-
-        // First insert into tasks collection
         const tasksCollection = tasksDB.collection('tasks');
-        const taskResult = await tasksCollection.insertOne(data1);
+        
+        // Process each task in the array
+        const processPromises = req.body.map(async (task) => {
+            const {
+                taskid,
+                taskname,
+                taskdescription,
+                dept,
+                assignto,
+                assignee,
+                taskcreator,
+                taskstatus,
+                dueDate
+            } = task;
 
-        // Then insert data2 into each assignee's collection
-        const insertPromises = assignedTo.map(async (assigneeEmail) => {
+            // Validate and convert dueDate
+            let convertedDueDate;
             try {
-                await tasksDB.collection(assigneeEmail).insertOne(data2);
+                if (!dueDate) throw new Error('Due date is required');
+                convertedDueDate = new Date(dueDate);
+                if (isNaN(convertedDueDate.getTime())) throw new Error('Invalid date format');
+                if (convertedDueDate < new Date()) throw new Error('Due date cannot be in the past');
             } catch (error) {
-                console.error(`Error inserting task for ${assigneeEmail}:`, error);
-                throw error;
+                throw new Error(`Invalid date for task ${taskid}: ${error.message}`);
             }
+
+            // Validate assignee is an array
+            if (!Array.isArray(assignee)) {
+                throw new Error(`assignee must be an array of emails for task ${taskid}`);
+            }
+
+            const data1 = {
+                taskId: taskid,
+                taskName: taskname,
+                taskdescription: taskdescription,
+                dueDate: convertedDueDate,
+                assignedTo: assignee,
+                assignedNames: assignto,
+                Status: taskstatus,
+                taskcreator: taskcreator,
+                dept: dept,
+                noOfExpectedResponse: assignto.length,
+                responseRecieved: 0,
+                userswhosubmitted: [],
+                nosubmits: assignto.slice()
+            };
+
+            const data2 = {
+                taskId: taskid,
+                taskName: taskname,
+                taskdescription: taskdescription,
+                dueDate: convertedDueDate,
+                Status: "Not done"
+            };
+
+            // Insert task into main collection
+            await tasksCollection.insertOne(data1);
+
+            // Insert into each assignee's collection
+            const assigneePromises = assignee.map(assigneeEmail =>
+                tasksDB.collection(assigneeEmail).insertOne(data2)
+            );
+
+            await Promise.all(assigneePromises);
         });
 
-
-        // Wait for all insertions to complete
-        await Promise.all(insertPromises);
+        // Wait for all tasks to be processed
+        await Promise.all(processPromises);
 
         return res.status(201).json({
             success: true,
-            message: 'Task created and assigned successfully',
-            taskId: taskResult.insertedId
+            message: 'All tasks created and assigned successfully'
         });
 
     } catch (error) {
-        console.error('Error creating task:', error);
+        console.error('Error creating tasks:', error);
         return res.status(500).json({
             success: false,
-            message: 'Internal server error'
+            message: error.message || 'Internal server error'
         });
     }
 });
@@ -450,7 +455,7 @@ Router.post('/submittask', async (req, res) => {
             throw new Error('Database connection not established');
         }
 
-        const { taskdone, email, taskId } = req.body;
+        const { name, taskId,email } = req.body;
 
         // Connect to TasksMP database
         const tasksDB = client.db('TasksMP');
@@ -460,9 +465,9 @@ Router.post('/submittask', async (req, res) => {
         const taskUpdate = await tasksCollection.findOneAndUpdate(
             { taskId: taskId },
             {
-                $pull: { nosubmits: email },          // Remove email from nosubmits
-                $inc: { responseRecieved: 1 },        // Increment responseRecieved
-                $push: { userswhosubmitted: email }   // Add email to userswhosubmitted
+                $pull: { nosubmits: name },          // Remove name from nosubmits
+                $inc: { responseRecieved: 1 },       // Increment responseRecieved
+                $push: { userswhosubmitted: name }   // Add name to userswhosubmitted
             },
             { returnDocument: 'after' }
         );
@@ -670,6 +675,59 @@ Router.post('/fetchteam', async (req, res) => {
         });
     }
 });
+
+
+Router.post('/namefetch', async (req, res) => {
+    let client;
+    try {
+        client = await mongodbSocket;
+        if (!client) {
+            throw new Error('Database connection not established');
+        }
+
+        const { dept } = req.body;
+        // Validate department
+        if (!['AOF', 'IDP', 'PDE'].includes(dept.toUpperCase())) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid department'
+            });
+        }
+
+        const db = client.db('UsersTMP');
+        const usersCollection = db.collection('users');
+
+        // Fetch users and transform the data
+        const users = await usersCollection
+            .find({ department: dept.toUpperCase() })
+            .project({
+                name: { $concat: ['$firstname', ' ', '$lastname'] },
+                email: 1,
+                _id: 0
+            })
+            .toArray();
+
+        if (!users.length) {
+            return res.status(404).json({
+                success: false,
+                message: `No users found in ${dept.toUpperCase()} department`
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Users fetched successfully',
+            users: users
+        });
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+
+})
 
 
 module.exports = Router;
