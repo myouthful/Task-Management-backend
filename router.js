@@ -39,14 +39,16 @@ Router.post('/signup', userValidationRules, async (req, res) => {
             "email": email,
             "password": password,
             "role": "Not Assigned",
-            "validated": false
+
+            "validated": "false"
+
         }
 
         const data2 = {
             "firstname": firstname,
             "lastname": lastname,
             "email": email,
-            "validated": false
+            "validated": "false"
         }
 
         // First Database Operation
@@ -102,8 +104,8 @@ Router.get('/recentsignup', async (req, res) => {
         }
         const db = client.db('RoleLevel');
         const validatedUsersList = db.collection('users');
+        const users = await validatedUsersList.find({ validated: "false" }).toArray();
 
-        const users = await validatedUsersList.find({ validated: false }).toArray();
 
         if (!users) {
             return res.status(401).json({
@@ -228,6 +230,8 @@ Router.post('/assignroles', Emailvalidator, async (req, res) => {
         if (!client) {
             throw new Error('Database connection not established');
         }
+        console.log('Received Request:', req.body);
+
 
         //use validationResult to check for errors
         const errors = validationResult(req);
@@ -296,7 +300,9 @@ Router.post('/assignroles', Emailvalidator, async (req, res) => {
             { email: email },
             {
                 $set: {
-                    validated: true
+
+                    validated: "true"
+
                 }
             },
             {
