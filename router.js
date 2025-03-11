@@ -182,14 +182,16 @@ Router.post('/changeroles', async (req, res) => {
             throw new Error('Database connection not established');
         }
 
-        const { email, role } = req.body;
+        const { email, role, dept } = req.body;
 
         const db = client.db('UsersTMP');
         const usersCollection = db.collection('users');
 
         const result = await usersCollection.findOneAndUpdate(
             { email: email },
-            { $set: { role: role.toLowerCase() } },
+            { $set: { role: role.toLowerCase(),
+                department: dept.toUpperCase()
+             } },
             { returnDocument: 'after' }
         );
 
