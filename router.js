@@ -230,7 +230,7 @@ Router.post('/assignroles', Emailvalidator, async (req, res) => {
         if (!client) {
             throw new Error('Database connection not established');
         }
-        console.log('Received Request:', req.body);
+      
 
 
         //use validationResult to check for errors
@@ -277,7 +277,8 @@ Router.post('/assignroles', Emailvalidator, async (req, res) => {
             {
                 $set: {
                     role: role.toLowerCase(),
-                    department: dept.toUpperCase()
+                    department: dept.toUpperCase(),
+                    validated:true
                 }
             },
             {
