@@ -104,9 +104,8 @@ Router.get('/recentsignup', async (req, res) => {
         }
         const db = client.db('RoleLevel');
         const validatedUsersList = db.collection('users');
-        const users = await validatedUsersList.find({ validated: "false" }).toArray();
 
-        const users = await validatedUsersList.find({ validated: false }).toArray();
+        const users = await validatedUsersList.find({ validated:false }).toArray();
 
         if (!users) {
             return res.status(401).json({
