@@ -40,7 +40,7 @@ Router.post('/signup', userValidationRules, async (req, res) => {
             "password": password,
             "role": "Not Assigned",
 
-            "validated": "false"
+            "validated":false
 
         }
 
@@ -48,7 +48,7 @@ Router.post('/signup', userValidationRules, async (req, res) => {
             "firstname": firstname,
             "lastname": lastname,
             "email": email,
-            "validated": "false"
+            "validated":false
         }
 
         // First Database Operation
@@ -301,7 +301,7 @@ Router.post('/assignroles', Emailvalidator, async (req, res) => {
             {
                 $set: {
 
-                    validated: "true"
+                    validated:true
 
                 }
             },
