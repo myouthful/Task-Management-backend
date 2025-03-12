@@ -103,7 +103,7 @@ Router.get('/recentsignup', async (req, res) => {
         const db = client.db('RoleLevel');
         const validatedUsersList = db.collection('users');
 
-        const users = await validatedUsersList.find({ validated: false }).toArray();
+        const users = await validatedUsersList.find({ validated:false }).toArray();
 
         if (!users) {
             return res.status(401).json({
@@ -290,7 +290,7 @@ Router.post('/assignroles', Emailvalidator, async (req, res) => {
         }
 
         const validation = client.db('RoleLevel');
-        const validatedUsers = db.collection('users');
+        const validatedUsers = validation.collection('users');
 
         const validated = await validatedUsers.findOneAndUpdate(
             { email: email },
